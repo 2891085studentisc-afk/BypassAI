@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   const userPrompt = `Find the official company number and current director names for "${query}" in the United Kingdom.
 
-Use Google Search and prefer authoritative UK sources (Companies House, gov.uk, the company’s own filings).
+Base answers on generally known public information (e.g. Companies House style data). Do not claim live web search; if you are uncertain, reflect that in null/empty fields per the rules below.
 
 Return ONLY a single JSON object (no markdown, no code fences) with exactly these keys:
 - "companyName": string — the official registered name you believe matches the user’s search
@@ -102,9 +102,6 @@ If the search is ambiguous or data cannot be verified, still return best-effort 
     const response = await ai.models.generateContent({
       model: MODEL_ID,
       contents: userPrompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-      },
     });
 
     const text = response.text?.trim();
