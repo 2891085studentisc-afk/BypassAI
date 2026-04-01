@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
-const MODEL_ID = "gemini-2.0-flash";
+const MODEL_ID = "gemini-1.5-flash";
 
 function normalizeGcpProject(value: string | undefined): string | undefined {
   const v = value?.trim();
