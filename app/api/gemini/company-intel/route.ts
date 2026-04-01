@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const maxDuration = 60;
 
+const API_VERSION = "v1";
 const MODEL_ID = "gemini-1.5-flash";
 
 function normalizeGcpProject(value: string | undefined): string | undefined {
@@ -21,14 +22,14 @@ function createGenAI(): GoogleGenAI | { error: string } {
     if (!project) {
       return { error: "GOOGLE_CLOUD_PROJECT is required for Vertex AI (e.g. 963018105457 or projects/963018105457)." };
     }
-    return new GoogleGenAI({ vertexai: true, project, location });
+    return new GoogleGenAI({ vertexai: true, project, location, apiVersion: API_VERSION });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return { error: "GEMINI_API_KEY is not configured." };
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey, apiVersion: API_VERSION });
 }
 
 type CompanyIntel = {
