@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+}
+
+model Company {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  escalationEmail String?
+  contact         String?
+  successRate     Int      @default(85)
+  requestCount    Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Escalation {
+  id               String    @id @default(cuid())
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deadlineAt       DateTime  // Required for the 7-day buffer
+  sentAt           DateTime? // Populated once Resend succeeds
+  companyName      String
+  userEmail        String
+  accountNumber    String
+  complaintDetails String
+  status           String    @default("PENDING") 
+  isPremium        Boolean   @default(false)
+}
+
+model CompanyRequest {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  rating    Int
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}

@@ -1,67 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { type TrafficCompany } from "../lib/companies";
+import { useActionState } from "react";
+import { serveNotice, type ActionState } from "../serve-notice";
 
 const BRAND_GOLD = "#C5A059";
 const BG = "#050816";
 
 const PAYPAL_EXEC_STRIKE = "https://www.paypal.me/AnesuEmmanuel44/8GBP";
-
-type TrafficCompany = { name: string; contact: string };
-
-/** Top 50 high-traffic UK consumer brands + CEO / executive contact routes (built-in). */
-const HIGH_TRAFFIC_COMPANIES: readonly TrafficCompany[] = [
-  { name: "Sky", contact: "Exec: ann-marie.mackay@sky.uk" },
-  { name: "Amazon", contact: "Exec: ajassy@amazon.com" },
-  { name: "Virgin Media", contact: "Exec: lutz.schueler@virginmedia.co.uk" },
-  { name: "HSBC", contact: "Exec: customerrelations@hsbc.com" },
-  { name: "Barclays", contact: "CEO office: group chief executive (Barclays plc, London) — annual report governance" },
-  { name: "Vodafone", contact: "Exec: ahmed.essam@vodafone.com" },
-  { name: "EE", contact: "Exec: marc.allera@bt.com" },
-  { name: "British Gas", contact: "Exec: chris.o'shea@centrica.com" },
-  { name: "O2", contact: "CEO / MD: Virgin Media O2 (executive office, UK HQ) — regulator escalations CISAS" },
-  { name: "Tesco", contact: "CEO office: Tesco PLC registered office & executive correspondence (Welwyn)" },
-  { name: "Ryanair", contact: "CEO: Michael O’Leary office — investor / corporate affairs (Ryanair Holdings)" },
-  { name: "BT", contact: "Group CEO office: BT Group plc (London) — Ofcom escalations where applicable" },
-  { name: "TalkTalk", contact: "Executive team: TalkTalk Group — Companies House registered office route" },
-  { name: "Three", contact: "CEO: Three UK (CK Hutchison) — executive complaints escalation" },
-  { name: "Lloyds Bank", contact: "Group CEO: Lloyds Banking Group plc — executive complaints / FOS route" },
-  { name: "NatWest", contact: "Group CEO: NatWest Group plc — executive correspondence & FOS" },
-  { name: "Halifax", contact: "Part of Lloyds Banking Group — group CEO office escalations" },
-  { name: "Nationwide Building Society", contact: "Chief Executive: Nationwide Building Society (Swindon HQ)" },
-  { name: "Santander UK", contact: "CEO: Santander UK — executive office & FOS escalations" },
-  { name: "Scottish Power", contact: "CEO: Scottish Power Ltd — energy ombudsman / executive route" },
-  { name: "E.ON Next", contact: "CEO: E.ON UK / Next — energy ombudsman escalations" },
-  { name: "Octopus Energy", contact: "CEO: Octopus Energy Group — executive & Ofgem escalations" },
-  { name: "EDF Energy", contact: "UK CEO: EDF Energy — energy ombudsman route" },
-  { name: "Ovo Energy", contact: "CEO: OVO Group — executive complaints & Ofgem" },
-  { name: "Thames Water", contact: "CEO office: Thames Water — Ofwat / CCW escalations" },
-  { name: "Royal Mail", contact: "CEO: International Distributions Services plc — Postal Redress scheme" },
-  { name: "Evri", contact: "CEO office: Evri — retail ADR / ombudsman where applicable" },
-  { name: "DPD", contact: "UK CEO: DPDgroup UK — parcel ombudsman / executive route" },
-  { name: "DHL", contact: "Country management: DHL Express UK — executive escalations" },
-  { name: "Currys", contact: "CEO: Currys plc — investor relations / executive correspondence" },
-  { name: "Argos", contact: "Part of Sainsbury’s — group CEO office escalations" },
-  { name: "John Lewis", contact: "Executive team: John Lewis Partnership — chair / partnership council route" },
-  { name: "ASOS", contact: "CEO: ASOS plc — London HQ executive correspondence" },
-  { name: "Openreach", contact: "CEO: Openreach (BT Group) — Ofcom escalations" },
-  { name: "Plusnet", contact: "Part of BT Group — group CEO / executive complaints" },
-  { name: "Shell Energy", contact: "UK executive: Shell Energy Retail — Ombudsman route" },
-  { name: "Utilita", contact: "CEO: Utilita Energy — energy ombudsman escalations" },
-  { name: "Co-operative Group", contact: "CEO: Co-operative Group — member / executive route" },
-  { name: "Avanti West Coast", contact: "Managing Director: First Trenitalia / Avanti — Transport Focus" },
-  { name: "Southeastern", contact: "Managing Director: Southeastern (Govia) — Transport Focus" },
-  { name: "Southern Railway", contact: "Managing Director: GTR / Southern — Transport Focus" },
-  { name: "Northern Trains", contact: "Managing Director: Northern Trains — Transport Focus" },
-  { name: "Uber", contact: "UK GM: Uber UK — in-app escalations & ADR" },
-  { name: "Deliveroo", contact: "CEO: Deliveroo plc — UK executive correspondence" },
-  { name: "Just Eat", contact: "CEO: Just Eat Takeaway.com — UK executive route" },
-  { name: "McDonald's", contact: "UK CEO: McDonald’s UK — corporate affairs / executive office" },
-  { name: "British Airways", contact: "CEO: British Airways (IAG) — CAA / ADR escalations" },
-  { name: "easyJet", contact: "CEO: easyJet plc — executive complaints & ADR" },
-  { name: "PayPal", contact: "Executive escalations: PayPal Europe — Financial Ombudsman Service (UK)" },
-  { name: "Netflix", contact: "UK public policy / member support — executive escalations via help centre" },
-];
 
 const BOT_BREAKER_SCRIPT = `Subject: Formal request — human review of account [YOUR REF]
 
@@ -79,26 +26,29 @@ Summary: [INSERT BRIEF FACTS]
 Yours faithfully,
 [YOUR NAME]`;
 
-type CompanyIntel = {
-  companyName: string;
-  companyNumber: string | null;
-  directors: string[];
-  summary: string | null;
-};
-
-const GEMINI_DEBOUNCE_MS = 480;
+function LoadingSpinner({ className = "" }: { className?: string }) {
+  return (
+    <span className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`} />
+  );
+}
 
 function StrikeButton({
   className = "",
   variant = "gold",
+  escalationId = "",
 }: {
   className?: string;
   variant?: "gold" | "onGold";
+  escalationId?: string;
 }) {
   const onGold = variant === "onGold";
+  const paypalUrl = escalationId 
+    ? `${PAYPAL_EXEC_STRIKE}?item_number=${escalationId}&custom=${escalationId}`
+    : PAYPAL_EXEC_STRIKE;
+
   return (
     <a
-      href={PAYPAL_EXEC_STRIKE}
+      href={paypalUrl}
       target="_blank"
       rel="noopener noreferrer"
       className={`flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition duration-150 active:scale-[0.99] ${
@@ -112,71 +62,92 @@ function StrikeButton({
 }
 
 export default function Home() {
+  const [state, formAction, isPending] = useActionState(serveNotice, { success: false, error: null, id: null } as ActionState);
+  const [companies, setCompanies] = useState<TrafficCompany[]>([]);
   const [query, setQuery] = useState("");
   const [copied, setCopied] = useState(false);
-  const [accountNumber, setAccountNumber] = useState("");
-  const [complaintDetails, setComplaintDetails] = useState("");
-  const [formStatus, setFormStatus] = useState<"idle" | "sent">("idle");
-  const [intel, setIntel] = useState<CompanyIntel | null>(null);
-  const [intelStatus, setIntelStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [intelError, setIntelError] = useState<string | null>(null);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    async function loadCompanies() {
+      try {
+        const res = await fetch("/api/admin/companies");
+        if (res.ok) {
+          const data = await res.json();
+          setCompanies(data);
+        }
+      } catch (err) {
+        console.error("Failed to load companies:", err);
+      }
+    }
+    loadCompanies();
+  }, []);
+
+  const validateForm = (formData: FormData) => {
+    const errors: Record<string, string> = {};
+    const email = formData.get("email") as string;
+    const accountNumber = formData.get("accountNumber") as string;
+    const complaintDetails = formData.get("details") as string;
+
+    if (!accountNumber || !accountNumber.trim()) {
+      errors.accountNumber = "Account/reference number is required";
+    }
+
+    if (!email || !email.trim()) {
+      errors.userEmail = "Email address is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.userEmail = "Please enter a valid email address";
+    }
+
+    if (!complaintDetails || !complaintDetails.trim()) {
+      errors.complaintDetails = "Complaint details are required";
+    } else if (complaintDetails.length < 20) {
+      errors.complaintDetails = "Please provide more details (minimum 20 characters)";
+    }
+
+    if (!selectedCompany) {
+      errors.company = "Please select a company from the search results";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const trimmed = query.trim();
   const queryLower = trimmed.toLowerCase();
 
   const filtered = useMemo(() => {
-    if (!queryLower) return [...HIGH_TRAFFIC_COMPANIES];
-    return HIGH_TRAFFIC_COMPANIES.filter((c) => c.name.toLowerCase().includes(queryLower));
-  }, [queryLower]);
+    if (!queryLower) return companies;
+    return companies.filter((c) => c.name.toLowerCase().includes(queryLower));
+  }, [queryLower, companies]);
 
-  const showManualStrike = trimmed.length > 0 && filtered.length === 0;
+  const showOffListMessage = trimmed.length > 0 && filtered.length === 0;
 
-  useEffect(() => {
-    if (!showManualStrike || !trimmed) {
-      setIntel(null);
-      setIntelStatus("idle");
-      setIntelError(null);
-      return;
+  async function handleRequestCompany() {
+    setIsRequesting(true);
+    try {
+      await fetch("/api/companies/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: query }),
+      });
+      setRequestSent(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsRequesting(false);
     }
+  }
 
-    const ac = new AbortController();
-    const timer = setTimeout(async () => {
-      setIntelStatus("loading");
-      setIntelError(null);
-      setIntel(null);
-      try {
-        const res = await fetch("/api/gemini/company-intel", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: trimmed }),
-          signal: ac.signal,
-        });
-        const payload = (await res.json()) as { data?: CompanyIntel; error?: string };
-        if (ac.signal.aborted) return;
-        if (!res.ok) {
-          setIntelStatus("error");
-          setIntelError(payload.error ?? "Intelligence lookup failed.");
-          return;
-        }
-        if (payload.data) {
-          setIntel(payload.data);
-          setIntelStatus("success");
-        } else {
-          setIntelStatus("error");
-          setIntelError("No structured data returned.");
-        }
-      } catch (e) {
-        if ((e as Error).name === "AbortError") return;
-        setIntelStatus("error");
-        setIntelError("Network error. Try again.");
-      }
-    }, GEMINI_DEBOUNCE_MS);
-
-    return () => {
-      clearTimeout(timer);
-      ac.abort();
-    };
-  }, [trimmed, showManualStrike]);
+  const selectedCompany = useMemo(() => {
+    if (filtered.length > 0 && queryLower) {
+      const match = filtered.find((c) => c.name.toLowerCase() === queryLower);
+      if (match) return match.name;
+    }
+    return null;
+  }, [filtered, queryLower]);
 
   async function copyScript() {
     try {
@@ -186,11 +157,6 @@ export default function Home() {
     } catch {
       setCopied(false);
     }
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setFormStatus("sent");
   }
 
   return (
@@ -233,7 +199,7 @@ export default function Home() {
             className="mb-4 inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-white/70"
             style={{ borderColor: `${BRAND_GOLD}40` }}
           >
-            High-traffic database · Gemini intel off-list
+            UK Top 50 Brands Only · High-traffic database
           </p>
           <h1 className="max-w-4xl text-3xl font-semibold leading-tight tracking-tight sm:text-4xl md:text-5xl md:leading-[1.1]">
             Don&apos;t Talk to the Bot.
@@ -259,14 +225,12 @@ export default function Home() {
                 </div>
                 {trimmed ? (
                   <span className="text-xs font-medium tabular-nums text-white/35" aria-live="polite">
-                    {showManualStrike
-                      ? intelStatus === "loading"
-                        ? "AI lookup…"
-                        : "Off-list"
+                    {showOffListMessage
+                      ? "Not on list"
                       : `${filtered.length} match${filtered.length === 1 ? "" : "es"}`}
                   </span>
                 ) : (
-                  <span className="text-xs text-white/35">{HIGH_TRAFFIC_COMPANIES.length} in database</span>
+                  <span className="text-xs text-white/35">{companies.length} in database</span>
                 )}
               </div>
               <label htmlFor="company-search" className="sr-only">
@@ -284,107 +248,71 @@ export default function Home() {
                 style={{ "--gold": BRAND_GOLD } as React.CSSProperties}
               />
 
+              {/* Hidden input to pass selected company to Server Action */}
+              <input type="hidden" name="companyName" value={selectedCompany || ""} />
+
               {!trimmed ? (
                 <p className="mt-4 text-xs text-white/40">
                   Start typing to narrow the list, or scroll the full directory below.
                 </p>
               ) : null}
 
-              {showManualStrike ? (
+              {showOffListMessage ? (
                 <div
-                  className="mt-4 rounded-xl border-2 px-4 py-5 text-sm leading-relaxed text-[#050816]"
-                  style={{
-                    borderColor: BRAND_GOLD,
-                    backgroundColor: BRAND_GOLD,
-                    boxShadow: `0 0 0 1px ${BRAND_GOLD}40, 0 16px 40px -12px rgba(197, 160, 89, 0.45)`,
-                  }}
+                  className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-6 text-center"
                 >
-                  {intelStatus === "loading" ? (
-                    <>
-                      <p className="font-semibold">Running executive intelligence…</p>
-                      <p className="mt-2 text-[#050816]/90">
-                        Gemini + Google Search for{" "}
-                        <span className="font-medium text-[#050816]">&ldquo;{trimmed}&rdquo;</span>
+                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white/20 mb-3">
+                    <span className="text-lg font-bold">!</span>
+                  </div>
+                  <p className="text-sm font-medium text-white/80">Company Not Found</p>
+                  <p className="mt-1.5 text-xs text-white/40 leading-relaxed max-w-[240px] mx-auto">
+                    Sorry, this company is not currently on our high-traffic escalation list. 
+                    We focus exclusively on the top 50 most complained-about UK brands to ensure the highest success rate.
+                  </p>
+                  
+                  <div className="mt-6 pt-6 border-t border-white/5">
+                    {requestSent ? (
+                      <p className="text-xs text-[#C5A059] font-medium animate-pulse">
+                        Request logged! Our team will prioritize adding &quot;{query}&quot;.
                       </p>
-                      <div className="mt-4 space-y-2 animate-pulse">
-                        <div className="h-3 rounded bg-[#050816]/15" />
-                        <div className="h-3 w-[80%] rounded bg-[#050816]/12" />
-                        <div className="h-3 w-[55%] rounded bg-[#050816]/10" />
-                      </div>
-                    </>
-                  ) : intelStatus === "success" && intel ? (
-                    <>
-                      <p className="font-semibold">
-                        Executive Intelligence confirmed. Backdoor active for{" "}
-                        {intel.directors[0] ?? intel.companyName}. Proceed to Strike.
-                      </p>
-                      <div className="mt-4 space-y-2 rounded-lg border border-[#050816]/15 bg-[#050816]/[0.06] px-3 py-3 text-left">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-[#050816]/70">
-                          Registry snapshot
-                        </p>
-                        <p className="text-[13px] font-semibold text-[#050816]">{intel.companyName}</p>
-                        {intel.companyNumber ? (
-                          <p
-                            className="text-xs text-[#050816]/85"
-                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                          >
-                            Company no. {intel.companyNumber}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-[#050816]/70">Company number not verified — confirm at Companies House.</p>
-                        )}
-                        {intel.directors.length > 0 ? (
-                          <div className="mt-2">
-                            <p className="text-xs font-medium text-[#050816]/70">Current directors</p>
-                            <ul className="mt-1 list-inside list-disc text-xs text-[#050816]/90">
-                              {intel.directors.map((d) => (
-                                <li key={d}>{d}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : null}
-                        {intel.summary ? (
-                          <p className="mt-2 border-t border-[#050816]/10 pt-2 text-xs leading-relaxed text-[#050816]/80">
-                            {intel.summary}
-                          </p>
-                        ) : null}
-                      </div>
-                      <p className="mt-3 text-[11px] leading-relaxed text-[#050816]/65">
-                        AI + web search — verify all details on official UK registers before relying on them.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="font-semibold">Company Identity Verified. Proceed to Executive Strike.</p>
-                      <p className="mt-2 text-[#050816]/90">
-                        Your search: <span className="font-medium text-[#050816]">&ldquo;{trimmed}&rdquo;</span>
-                      </p>
-                      {intelError ? (
-                        <p className="mt-2 text-xs text-[#050816]/80" role="alert">
-                          {intelError}
-                          {intelError.includes("GEMINI_API_KEY") ? " Add GEMINI_API_KEY in .env.local." : ""}
-                        </p>
-                      ) : null}
-                    </>
-                  )}
-                  <StrikeButton variant="onGold" className="mt-4" />
+                    ) : (
+                      <button
+                        onClick={handleRequestCompany}
+                        disabled={isRequesting}
+                        className="text-xs font-semibold text-white/90 bg-white/5 border border-white/10 px-4 py-2 rounded-lg hover:bg-white/10 transition disabled:opacity-50"
+                      >
+                        {isRequesting ? "Logging request..." : `Request coverage for "${query}"`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <ul className="mt-3 max-h-[min(28rem,55vh)] space-y-3 overflow-y-auto pr-1">
                   {filtered.map((c) => (
                     <li
                       key={c.name}
-                      className="rounded-xl border border-white/[0.08] bg-[#070c1c] p-4 transition duration-150 hover:border-[color:var(--gold)]/35 hover:bg-[#0a1028]"
+                      onClick={() => setQuery(c.name)}
+                      className={`rounded-xl border p-4 transition duration-150 cursor-pointer ${selectedCompany === c.name ? 'border-[#C5A059] bg-[#0a1028]' : 'border-white/[0.08] bg-[#070c1c] hover:border-[#C5A059]/35 hover:bg-[#0a1028]'}`}
                       style={{ "--gold": BRAND_GOLD } as React.CSSProperties}
                     >
-                      <p className="text-sm font-semibold leading-snug text-white">{c.name}</p>
-                      <p
-                        className="mt-2 text-xs leading-relaxed text-white/60"
-                        style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
-                      >
-                        {c.contact}
-                      </p>
-                      <StrikeButton className="mt-4" />
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-sm font-semibold leading-snug text-white">{c.name}</p>
+                          <p
+                            className="mt-2 text-xs leading-relaxed text-[#C5A059]/80 font-medium"
+                            style={{ fontFamily: "var(--font-geist-mono), ui-monospace, monospace" }}
+                          >
+                            {c.sector}
+                          </p>
+                        </div>
+                        {c.successRate && (
+                          <div className="text-right">
+                            <span className="text-[10px] font-bold text-[#C5A059] bg-[#C5A059]/10 px-2 py-0.5 rounded-full border border-[#C5A059]/20">
+                              {c.successRate}% Success
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -428,7 +356,7 @@ export default function Home() {
               <p className="mt-1 text-sm text-white/55">
                 Provide your reference and a concise summary. We route serious cases for human review.
               </p>
-              {formStatus === "sent" ? (
+              {state.success ? (
                 <div
                   className="mt-6 rounded-xl border px-4 py-4 text-sm"
                   style={{
@@ -437,27 +365,88 @@ export default function Home() {
                     color: "rgba(255,255,255,0.92)",
                   }}
                 >
-                  Thank you. Your details have been received and will be reviewed by our team. If you
-                  used the Premium Executive Strike, include your PayPal receipt reference in any follow-up
-                  email.
+                  <p className="font-semibold text-lg">Escalation Request Sent.</p>
+                  <p className="mt-2 text-white/70">
+                    Your details for {selectedCompany || "your company"} have been received. 
+                  </p>
+                  <div className="mt-4 p-3 bg-white/5 border border-white/10 rounded-lg">
+                    <p className="text-[10px] uppercase tracking-widest text-white/40 mb-1">Your Case Reference</p>
+                    <p className="font-mono text-sm text-[#C5A059] font-bold select-all">{state.id || "PENDING..."}</p>
+                  </div>
+                  <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10">
+                    <p className="text-xs text-white/80 leading-relaxed">
+                      {state.autoSent 
+                        ? "🚀 High-Priority Strike: We have dispatched your formal escalation directly to the executive team. Check your email for your CC'd copy." 
+                        : "Our team is reviewing your case for executive routing. You will receive a confirmation email shortly."}
+                    </p>
+                  </div>
+                  <StrikeButton variant="onGold" escalationId={state.id || ""} className="mt-4" />
+                  <button 
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="mt-4 text-xs font-medium underline underline-offset-4 opacity-60 hover:opacity-100"
+                  >
+                    Submit another
+                  </button>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                <form 
+                  action={(formData) => {
+                    if (validateForm(formData)) {
+                      formAction(formData);
+                    }
+                  }} 
+                  className="mt-6 space-y-4"
+                >
+                  {state.error && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-400">
+                      {state.error}
+                    </div>
+                  )}
+                  <div>
+                    <label htmlFor="email" className="block text-xs font-medium text-white/60">
+                      Email address
+                    </label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      disabled={isPending}
+                      className={`mt-1.5 w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition focus:ring-2 disabled:opacity-50 ${
+                        formErrors.userEmail
+                          ? "border-red-500/50 bg-red-500/5 focus:border-red-500"
+                          : "border-white/10 bg-[#0a1024] focus:border-[color:var(--gold)]"
+                      }`}
+                      style={{ "--gold": BRAND_GOLD } as React.CSSProperties}
+                      placeholder="Where should we send your receipt?"
+                    />
+                    {formErrors.userEmail && (
+                      <p className="mt-1 text-xs text-red-400">{formErrors.userEmail}</p>
+                    )}
+                  </div>
                   <div>
                     <label htmlFor="account" className="block text-xs font-medium text-white/60">
                       Account number
                     </label>
                     <input
                       id="account"
-                      name="account"
+                      name="accountNumber"
                       required
                       autoComplete="off"
-                      value={accountNumber}
-                      onChange={(e) => setAccountNumber(e.target.value)}
-                      className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0a1024] px-4 py-3 text-sm text-white outline-none transition focus:border-[color:var(--gold)] focus:ring-2"
+                      disabled={isPending}
+                      className={`mt-1.5 w-full rounded-xl border px-4 py-3 text-sm text-white outline-none transition focus:ring-2 disabled:opacity-50 ${
+                        formErrors.accountNumber
+                          ? "border-red-500/50 bg-red-500/5 focus:border-red-500"
+                          : "border-white/10 bg-[#0a1024] focus:border-[color:var(--gold)]"
+                      }`}
                       style={{ "--gold": BRAND_GOLD } as React.CSSProperties}
                       placeholder="Customer or account reference"
                     />
+                    {formErrors.accountNumber && (
+                      <p className="mt-1 text-xs text-red-400">{formErrors.accountNumber}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="complaint" className="block text-xs font-medium text-white/60">
@@ -465,22 +454,41 @@ export default function Home() {
                     </label>
                     <textarea
                       id="complaint"
-                      name="complaint"
+                      name="details"
                       required
                       rows={5}
-                      value={complaintDetails}
-                      onChange={(e) => setComplaintDetails(e.target.value)}
-                      className="mt-1.5 w-full resize-y rounded-xl border border-white/10 bg-[#0a1024] px-4 py-3 text-sm text-white outline-none transition focus:border-[color:var(--gold)] focus:ring-2"
+                      disabled={isPending}
+                      className={`mt-1.5 w-full resize-y rounded-xl border px-4 py-3 text-sm text-white outline-none transition focus:ring-2 disabled:opacity-50 ${
+                        formErrors.complaintDetails
+                          ? "border-red-500/50 bg-red-500/5 focus:border-red-500"
+                          : "border-white/10 bg-[#0a1024] focus:border-[color:var(--gold)]"
+                      }`}
                       style={{ "--gold": BRAND_GOLD } as React.CSSProperties}
                       placeholder="Dates, amounts, what you asked for, and what went wrong."
                     />
+                    {formErrors.complaintDetails && (
+                      <p className="mt-1 text-xs text-red-400">{formErrors.complaintDetails}</p>
+                    )}
                   </div>
+                  {formErrors.company && (
+                    <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-400">
+                      {formErrors.company}
+                    </div>
+                  )}
                   <button
                     type="submit"
-                    className="w-full rounded-xl px-5 py-3.5 text-sm font-semibold text-[#050816] transition hover:brightness-110"
+                    disabled={isPending}
+                    className="w-full rounded-xl px-5 py-3.5 text-sm font-semibold text-[#050816] transition hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ backgroundColor: BRAND_GOLD }}
                   >
-                    Submit to CEO route
+                    {isPending ? (
+                      <>
+                        <LoadingSpinner className="text-[#050816]" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit to CEO route"
+                    )}
                   </button>
                 </form>
               )}
@@ -488,11 +496,19 @@ export default function Home() {
           </div>
         </section>
 
-        <footer className="mt-20 border-t border-white/[0.08] pt-8 text-center text-xs text-white/40 sm:text-left">
+        <footer className="mt-20 border-t border-white/[0.08] pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/40">
           <p>
             Bypass.ai provides templates and escalation guidance. We are not a law firm; seek independent
             advice for regulated or legal disputes.
           </p>
+          <div className="flex gap-4">
+            <a href="/privacy" className="hover:text-white transition">
+              Privacy Policy
+            </a>
+            <a href="/terms" className="hover:text-white transition">
+              Terms of Service
+            </a>
+          </div>
         </footer>
       </main>
     </div>
